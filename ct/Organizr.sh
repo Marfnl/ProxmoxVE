@@ -22,9 +22,6 @@ catch_errors
 start
 
 # --- Pre-flight checks & container prep ---
-check_root
-arch_check
-pve_check
 network_check
 check_container_storage
 check_container_resources
