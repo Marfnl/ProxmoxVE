@@ -1,108 +1,86 @@
 #!/usr/bin/env bash
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2021-2025 community-scripts ORG
+# Author: Marvin Disse
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/prometheus/blackbox_exporter
 
-APP="Prometheus Blackbox Exporter"
-var_tags="${var_tags:-prometheus;monitoring;exporter}"
-var_cpu="${var_cpu:-1}"
-var_ram="${var_ram:-512}"
-var_disk="${var_disk:-4}"
-var_os="${var_os:-debian}"
-var_version="${var_version:-12}"
-var_unprivileged="${var_unprivileged:-1}"  # ICMP may require privileged; default unprivileged
+# App Default Values
+# Name of the app (e.g. Google, Adventurelog, Apache-Guacamole"
+APP="Blackbox Exporter"
+# Tags for Proxmox VE, maximum 2 pcs., no spaces allowed, separated by a semicolon ; (e.g. database | adblock;dhcp)
+var_tags="${var_tags:-[TAGS]}"
+# Number of cores (1-X) (e.g. 4) - default are 2
+var_cpu="${var_cpu:-[CPU]}"
+# Amount of used RAM in MB (e.g. 2048 or 4096)
+var_ram="${var_ram:-[RAM]}"
+# Amount of used disk space in GB (e.g. 4 or 10)
+var_disk="${var_disk:-[DISK]}"
+# Default OS (e.g. debian, ubuntu, alpine)
+var_os="${var_os:-[OS]}"
+# Default OS version (e.g. 12 for debian, 24.04 for ubuntu, 3.20 for alpine)
+var_version="${var_version:-[VERSION]}"
+# 1 = unprivileged container, 0 = privileged container
+var_unprivileged="${var_unprivileged:-[UNPRIVILEGED]}"
 
 header_info "$APP"
 variables
 color
 catch_errors
 
-# --- Preflight checks (like the originals) ---
-check_container_storage        # ensure selected storage has room for var_disk
-check_container_resources      # sanity-check CPU/RAM inputs
-
-# --- Optional: updater parity with other scripts ---
-update_script() {
+function update_script() {
   header_info
   check_container_storage
   check_container_resources
 
-  if ! dpkg -s prometheus-blackbox-exporter &>/dev/null; then
-    msg_error "No ${APP} installation found!"
-    exit 1
+  # Check if installation is present | -f for file, -d for folder
+  if [[ ! -f [INSTALLATION_CHECK_PATH] ]]; then
+    msg_error "No ${APP} Installation Found!"
+    exit
   fi
 
-  msg_info "Updating ${APP}"
-  $STD apt-get update
-  $STD apt-get install -y --no-install-recommends prometheus-blackbox-exporter
-  $STD systemctl restart prometheus-blackbox-exporter
-  msg_ok "Updated ${APP}"
-  exit 0
+  # Crawling the new version and checking whether an update is required
+  RELEASE=$(curl -fsSL [RELEASE_URL] | [PARSE_RELEASE_COMMAND])
+  if [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]] || [[ ! -f /opt/${APP}_version.txt ]]; then
+    # Stopping Services
+    msg_info "Stopping $APP"
+    systemctl stop [SERVICE_NAME]
+    msg_ok "Stopped $APP"
+
+    # Creating Backup
+    msg_info "Creating Backup"
+    tar -czf "/opt/${APP}_backup_$(date +%F).tar.gz" [IMPORTANT_PATHS]
+    msg_ok "Backup Created"
+
+    # Execute Update
+    msg_info "Updating $APP to v${RELEASE}"
+    [UPDATE_COMMANDS]
+    msg_ok "Updated $APP to v${RELEASE}"
+
+    # Starting Services
+    msg_info "Starting $APP"
+    systemctl start [SERVICE_NAME]
+    msg_ok "Started $APP"
+
+    # Cleaning up
+    msg_info "Cleaning Up"
+    rm -rf [TEMP_FILES]
+    msg_ok "Cleanup Completed"
+
+    # Last Action
+    echo "${RELEASE}" >/opt/${APP}_version.txt
+    msg_ok "Update Successful"
+  else
+    msg_ok "No update required. ${APP} is already at v${RELEASE}"
+  fi
+  exit
 }
 
 start
 build_container
-
-# --- Install & configure inside the LXC ---
-post_install() {
-  msg_info "Installing Prometheus Blackbox Exporter"
-  $STD apt-get update
-  $STD apt-get install -y --no-install-recommends prometheus-blackbox-exporter ca-certificates curl
-  msg_ok "Installed Prometheus Blackbox Exporter"
-
-  msg_info "Configuring Blackbox Exporter"
-  # Minimal config: HTTP 2xx module (add tcp/icmp/dns later if you want)
-  $STD bash -c 'cat > /etc/prometheus/blackbox-exporter.yml << "EOF"
-modules:
-  http_2xx:
-    prober: http
-EOF'
-
-  # Bind to all interfaces on 9115 and use our config file
-  $STD sed -i 's|^ARGS=.*|ARGS="--config.file=/etc/prometheus/blackbox-exporter.yml --web.listen-address=0.0.0.0:9115"|' \
-    /etc/default/prometheus-blackbox-exporter
-
-  $STD systemctl daemon-reload
-  $STD systemctl enable --now prometheus-blackbox-exporter
-
-  # Quick health check (non-fatal)
-  if ! $STD curl -fsS http://127.0.0.1:9115/metrics >/dev/null; then
-    msg_warn "Blackbox Exporter not yet responding on :9115 — check 'journalctl -u prometheus-blackbox-exporter' in the CT"
-  fi
-  msg_ok "Configured Blackbox Exporter"
-}
-
-description() {
-  echo -e "${BL}${APP}${CL}
-  - Port:    ${YW}9115${CL}
-  - Service: ${YW}prometheus-blackbox-exporter${CL}
-  - Config:  ${YW}/etc/prometheus/blackbox-exporter.yml${CL}
-  - Note: ICMP probes may fail in unprivileged LXC; recreate privileged if you need the 'icmp' module.
-
-Add this to Prometheus (replace BLACKBOX_LXC_IP):
-${YW}- job_name: 'blackbox-http'
-  metrics_path: /probe
-  params:
-    module: [http_2xx]
-  static_configs:
-    - targets:
-      - https://example.org
-  relabel_configs:
-    - source_labels: [__address__]
-      target_label: __param_target
-    - source_labels: [__param_target]
-      target_label: instance
-    - target_label: __address__
-      replacement: BLACKBOX_LXC_IP:9115${CL}
-"
-}
-
-post_install
 description
 
 msg_ok "Completed Successfully!\n"
-echo -e "${CREATING}${GN}${APP} LXC is ready.${CL}"
-echo -e "${INFO}${YW} Try:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:9115/metrics${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:9115/probe?module=http_2xx&target=https://example.org${CL}"
+echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
+echo -e "${INFO}${YW} Access it using the following URL:${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:[PORT]${CL}"
