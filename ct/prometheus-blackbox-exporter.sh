@@ -7,7 +7,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 
 # App Default Values
 # Name of the app (e.g. Google, Adventurelog, Apache-Guacamole"
-APP="Prometheus Blackbox Exporter"
+APP="Prometheus-Blackbox-Exporter"
 # Tags for Proxmox VE, maximum 2 pcs., no spaces allowed, separated by a semicolon ; (e.g. database | adblock;dhcp)
 var_tags="${var_tags:-[TAGS]}"
 # Number of cores (1-X) (e.g. 4) - default are 2
