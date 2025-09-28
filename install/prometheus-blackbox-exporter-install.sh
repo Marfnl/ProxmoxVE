@@ -22,22 +22,6 @@ $STD apt-get install -y \
   [PACKAGE_3]
 msg_ok "Installed Dependencies"
 
-# Template: MySQL Database
-msg_info "Setting up Database"
-DB_NAME=[DB_NAME]
-DB_USER=[DB_USER]
-DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
-$STD mysql -u root -e "CREATE DATABASE $DB_NAME;"
-$STD mysql -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password AS PASSWORD('$DB_PASS');"
-$STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
-{
-  echo "${APPLICATION} Credentials"
-  echo "Database User: $DB_USER"
-  echo "Database Password: $DB_PASS"
-  echo "Database Name: $DB_NAME"
-} >>~/"$APP_NAME".creds
-msg_ok "Set up Database"
-
 # Setup App
 msg_info "Setup ${APPLICATION}"
 RELEASE=$(curl -fsSL https://api.github.com/repos/[REPO]/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
