@@ -22,6 +22,24 @@ catch_errors
 check_container_storage       # ensure selected storage has room for var_disk
 check_container_resources     # sanity-check CPU/RAM inputs
 
+update_script() {
+  header_info
+  check_container_storage
+  check_container_resources
+
+  if ! dpkg -s prometheus-blackbox-exporter &>/dev/null; then
+    msg_error "No ${APP} installation found!"
+    exit 1
+  fi
+
+  msg_info "Updating ${APP}"
+  $STD apt-get update
+  $STD apt-get install -y --no-install-recommends prometheus-blackbox-exporter
+  $STD systemctl restart prometheus-blackbox-exporter
+  msg_ok "Updated ${APP}"
+  exit 0
+}
+
 start
 build_container
 
