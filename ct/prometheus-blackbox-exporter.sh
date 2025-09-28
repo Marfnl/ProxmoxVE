@@ -18,10 +18,11 @@ variables
 color
 catch_errors
 
-# --- Preflight (like the originals) ---
-check_container_storage       # ensure selected storage has room for var_disk
-check_container_resources     # sanity-check CPU/RAM inputs
+# --- Preflight checks (like the originals) ---
+check_container_storage        # ensure selected storage has room for var_disk
+check_container_resources      # sanity-check CPU/RAM inputs
 
+# --- Optional: updater parity with other scripts ---
 update_script() {
   header_info
   check_container_storage
@@ -43,7 +44,7 @@ update_script() {
 start
 build_container
 
-# --- Install inside the LXC ---
+# --- Install & configure inside the LXC ---
 post_install() {
   msg_info "Installing Prometheus Blackbox Exporter"
   $STD apt-get update
@@ -51,12 +52,12 @@ post_install() {
   msg_ok "Installed Prometheus Blackbox Exporter"
 
   msg_info "Configuring Blackbox Exporter"
-  # Minimal config: only HTTP 2xx (you can add tcp/icmp/dns later)
-  cat >/etc/prometheus/blackbox-exporter.yml <<'EOF'
+  # Minimal config: HTTP 2xx module (add tcp/icmp/dns later if you want)
+  $STD bash -c 'cat > /etc/prometheus/blackbox-exporter.yml << "EOF"
 modules:
   http_2xx:
     prober: http
-EOF
+EOF'
 
   # Bind to all interfaces on 9115 and use our config file
   $STD sed -i 's|^ARGS=.*|ARGS="--config.file=/etc/prometheus/blackbox-exporter.yml --web.listen-address=0.0.0.0:9115"|' \
@@ -66,8 +67,8 @@ EOF
   $STD systemctl enable --now prometheus-blackbox-exporter
 
   # Quick health check (non-fatal)
-  if ! curl -fsS http://127.0.0.1:9115/metrics >/dev/null; then
-    msg_warn "Blackbox Exporter not yet responding on :9115 — check 'journalctl -u prometheus-blackbox-exporter'"
+  if ! $STD curl -fsS http://127.0.0.1:9115/metrics >/dev/null; then
+    msg_warn "Blackbox Exporter not yet responding on :9115 — check 'journalctl -u prometheus-blackbox-exporter' in the CT"
   fi
   msg_ok "Configured Blackbox Exporter"
 }
@@ -77,7 +78,7 @@ description() {
   - Port:    ${YW}9115${CL}
   - Service: ${YW}prometheus-blackbox-exporter${CL}
   - Config:  ${YW}/etc/prometheus/blackbox-exporter.yml${CL}
-  - Note: ICMP probes may fail in unprivileged LXC; recreate privileged if you need 'icmp'.
+  - Note: ICMP probes may fail in unprivileged LXC; recreate privileged if you need the 'icmp' module.
 
 Add this to Prometheus (replace BLACKBOX_LXC_IP):
 ${YW}- job_name: 'blackbox-http'
