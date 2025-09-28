@@ -8,20 +8,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # App Default Values
 # Name of the app (e.g. Google, Adventurelog, Apache-Guacamole"
 APP="Prometheus-Blackbox-Exporter"
-# Tags for Proxmox VE, maximum 2 pcs., no spaces allowed, separated by a semicolon ; (e.g. database | adblock;dhcp)
-var_tags="${var_tags:-[TAGS]}"
-# Number of cores (1-X) (e.g. 4) - default are 2
-var_cpu="${var_cpu:-[CPU]}"
-# Amount of used RAM in MB (e.g. 2048 or 4096)
-var_ram="${var_ram:-[RAM]}"
-# Amount of used disk space in GB (e.g. 4 or 10)
-var_disk="${var_disk:-[DISK]}"
-# Default OS (e.g. debian, ubuntu, alpine)
-var_os="${var_os:-[OS]}"
-# Default OS version (e.g. 12 for debian, 24.04 for ubuntu, 3.20 for alpine)
-var_version="${var_version:-[VERSION]}"
-# 1 = unprivileged container, 0 = privileged container
-var_unprivileged="${var_unprivileged:-[UNPRIVILEGED]}"
+var_tags="${var_tags:-monitoring}"
+var_cpu="${var_cpu:-1}"
+var_ram="${var_ram:-512}"
+var_disk="${var_disk:-4}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-12}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables
