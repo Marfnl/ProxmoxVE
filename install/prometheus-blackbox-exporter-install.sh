@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/prometheus/blackbox_exporter
 
-# Import Functions und Setup
+# Import Functions and Setup
 source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
@@ -14,49 +14,38 @@ setting_up_container
 network_check
 update_os
 
-# Installing Dependencies
+# Install package
 msg_info "Installing Prometheus Blackbox Exporter"
-$STD apt-get install -y \
-  [PACKAGE_1] \
-  [PACKAGE_2] \
-  [PACKAGE_3]
-msg_ok "Installed Dependencies"
+export DEBIAN_FRONTEND=noninteractive
+$STD apt-get update
+$STD apt-get install -y --no-install-recommends prometheus-blackbox-exporter ca-certificates curl
+msg_ok "Installed Prometheus Blackbox Exporter"
 
-# Setup App
-msg_info "Setup ${APPLICATION}"
-RELEASE=$(curl -fsSL https://api.github.com/repos/[REPO]/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
-curl -fsSL -o "${RELEASE}.zip" "https://github.com/[REPO]/archive/refs/tags/${RELEASE}.zip"
-unzip -q "${RELEASE}.zip"
-mv "${APPLICATION}-${RELEASE}/" "/opt/${APPLICATION}"
-#
-#
-#
-echo "${RELEASE}" >/opt/"${APPLICATION}"_version.txt
-msg_ok "Setup ${APPLICATION}"
-
-# Creating Service (if needed)
-msg_info "Creating Service"
-cat <<EOF >/etc/systemd/system/"${APPLICATION}".service
-[Unit]
-Description=${APPLICATION} Service
-After=network.target
-
-[Service]
-ExecStart=[START_COMMAND]
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+# Configure exporter
+msg_info "Configuring Blackbox Exporter"
+# Minimal default config: just HTTP 2xx module
+cat >/etc/prometheus/blackbox-exporter.yml <<'EOF'
+modules:
+  http_2xx:
+    prober: http
 EOF
-systemctl enable -q --now "${APPLICATION}"
-msg_ok "Created Service"
+
+# Ensure it listens on all interfaces:9115 and uses our config
+sed -i 's|^ARGS=.*|ARGS="--config.file=/etc/prometheus/blackbox-exporter.yml --web.listen-address=0.0.0.0:9115"|' \
+  /etc/default/prometheus-blackbox-exporter
+msg_ok "Configured Blackbox Exporter"
+
+# Enable service
+msg_info "Enabling Service"
+systemctl daemon-reload
+systemctl enable -q --now prometheus-blackbox-exporter
+msg_ok "Service Enabled"
 
 motd_ssh
 customize
 
 # Cleanup
 msg_info "Cleaning up"
-rm -f "${RELEASE}".zip
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned"
