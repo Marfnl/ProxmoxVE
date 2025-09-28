@@ -15,7 +15,7 @@ network_check
 update_os
 
 # Installing Dependencies
-msg_info "Installing Dependencies"
+msg_info "Installing Prometheus Blackbox Exporter"
 $STD apt-get install -y \
   [PACKAGE_1] \
   [PACKAGE_2] \
