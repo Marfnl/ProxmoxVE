@@ -6,70 +6,76 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://github.com/prometheus/blackbox_exporter
 
 # App Default Values
-# Name of the app (e.g. Google, Adventurelog, Apache-Guacamole"
 APP="Prometheus-Blackbox-Exporter"
-var_tags="${var_tags:-monitoring}"
+var_tags="${var_tags:-monitoring;prometheus}"
 var_cpu="${var_cpu:-1}"
 var_ram="${var_ram:-512}"
 var_disk="${var_disk:-4}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
 var_unprivileged="${var_unprivileged:-1}"
-var_install=""   # DEV: prevent framework from fetching upstream installer
 
+# App output & base settings
 header_info "$APP"
 variables
 color
 catch_errors
 
+# Update function
 function update_script() {
+  # Function Header
   header_info
   check_container_storage
   check_container_resources
 
   # Check if installation is present | -f for file, -d for folder
-  if [[ ! -f [INSTALLATION_CHECK_PATH] ]]; then
+  if ! dpkg -s prometheus-blackbox-exporter &>/dev/null && [[ ! -f "/opt/${APP}_version.txt" ]]; then
     msg_error "No ${APP} Installation Found!"
     exit
   fi
 
   # Crawling the new version and checking whether an update is required
-  RELEASE=$(curl -fsSL [RELEASE_URL] | [PARSE_RELEASE_COMMAND])
-  if [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]] || [[ ! -f /opt/${APP}_version.txt ]]; then
-    # Stopping Services
-    msg_info "Stopping $APP"
-    systemctl stop [SERVICE_NAME]
-    msg_ok "Stopped $APP"
+  current_file="/opt/${APP}_version.txt"
+  current_ver="$( [ -f "$current_file" ] && cat "$current_file" || dpkg-query -W -f='${Version}\n' prometheus-blackbox-exporter 2>/dev/null || echo 0 )"
+  candidate_ver="$(apt-cache policy prometheus-blackbox-exporter | awk '/Candidate:/ {print $2}')"
 
-    # Creating Backup
-    msg_info "Creating Backup"
-    tar -czf "/opt/${APP}_backup_$(date +%F).tar.gz" [IMPORTANT_PATHS]
-    msg_ok "Backup Created"
+  if [[ -z "$candidate_ver" || "$candidate_ver" == "(none)" ]]; then
+    msg_error "Could not determine candidate version from APT."
+    exit
+  fi
+
+  if [[ ! -f "$current_file" ]] || dpkg --compare-versions "$candidate_ver" gt "$current_ver"; then
 
     # Execute Update
-    msg_info "Updating $APP to v${RELEASE}"
-    [UPDATE_COMMANDS]
-    msg_ok "Updated $APP to v${RELEASE}"
+    msg_info "Updating ${APP} to v${candidate_ver}"
+    $STD apt-get update
+    $STD apt-get install -y --only-upgrade prometheus-blackbox-exporter
 
     # Starting Services
-    msg_info "Starting $APP"
-    systemctl start [SERVICE_NAME]
-    msg_ok "Started $APP"
+    $STD systemctl restart prometheus-blackbox-exporter
 
     # Cleaning up
-    msg_info "Cleaning Up"
-    rm -rf [TEMP_FILES]
-    msg_ok "Cleanup Completed"
+    # (No temporary files to remove for APT-based update.)
 
     # Last Action
-    echo "${RELEASE}" >/opt/${APP}_version.txt
-    msg_ok "Update Successful"
+    echo "$candidate_ver" > "$current_file"
+    msg_ok "Updated ${APP} to v${candidate_ver}"
   else
-    msg_ok "No update required. ${APP} is already at v${RELEASE}"
+    msg_ok "No update required. ${APP} is already at v${current_ver}."
   fi
   exit
 }
 
+# Optional info shown after provisioning
+function description() {
+  echo -e "${BL}${APP}${CL}
+  - Port:    ${YW}9115${CL}
+  - Service: ${YW}prometheus-blackbox-exporter${CL}
+  - Config:  ${YW}/etc/prometheus/blackbox-exporter.yml${CL}
+  - Note: ICMP probes may fail in unprivileged LXC; recreate privileged if you need 'icmp'."
+}
+
+# End of the script
 start
 build_container
 description
@@ -77,4 +83,4 @@ description
 msg_ok "Completed Successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
 echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:[PORT]${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:9115${CL}"
