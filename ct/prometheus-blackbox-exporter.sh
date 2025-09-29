@@ -68,16 +68,6 @@ function update_script() {
   exit
 }
 
-# Optional info shown after provisioning
-function description() {
-  echo -e "${BL}${APP}${CL}
-  - Port:    ${YW}9115${CL}
-  - Service: ${YW}prometheus-blackbox-exporter${CL}
-  - Config:  ${YW}/etc/prometheus/blackbox-exporter.yml${CL}
-  - Note: ICMP probes may fail in unprivileged LXC; recreate privileged if you need 'icmp'."
-}
-
-# End of the script
 start
 build_container
 description
