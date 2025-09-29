@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+#source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+# DEV: use your fork/branch while testing
+source <(curl -s https://raw.githubusercontent.com/Marfnl/ProxmoxVE/refs/heads/feature/blackbox-exporter/misc/build.func)
 # Copyright (c) 2021-2025 community-scripts ORG
 # Author: Marfnl
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
